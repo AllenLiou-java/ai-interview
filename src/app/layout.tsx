@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ApiKeyDialogProvider } from "@/components/api-key-dialog";
 import { AuthProvider } from "@/components/auth-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -24,9 +25,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="flex min-h-full flex-col font-sans">
         <AuthProvider>
-          <SiteHeader />
-          <div className="flex flex-1 flex-col">{children}</div>
-          <SiteFooter />
+          <ApiKeyDialogProvider>
+            <SiteHeader />
+            <div className="flex flex-1 flex-col">{children}</div>
+            <SiteFooter />
+          </ApiKeyDialogProvider>
         </AuthProvider>
       </body>
     </html>

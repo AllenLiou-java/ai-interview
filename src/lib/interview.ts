@@ -63,3 +63,8 @@ export type InterviewRecordDetail = SaveInterviewRequest & {
 };
 
 export type PublicUser = { id: string; username: string; email: string };
+
+/** BYOK：前端以此 header 帶上使用者自己的 OpenAI API Key */
+export const OPENAI_KEY_HEADER = "x-openai-api-key";
+/** API Key 缺少或無效時的錯誤代碼，前端據此引導使用者重新設定 */
+export const API_KEY_ERROR_CODE = "invalid_api_key";

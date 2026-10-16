@@ -11,10 +11,14 @@ import {
   SuggestionCard,
   UserBubble,
 } from "@/components/interview/chat";
+import { useApiKeyDialog } from "@/components/api-key-dialog";
+import { getApiKey, maskApiKey, useApiKey } from "@/lib/api-key";
 import {
+  API_KEY_ERROR_CODE,
   DEFAULT_QUESTIONS,
   MAX_QUESTIONS,
   MIN_QUESTIONS,
+  OPENAI_KEY_HEADER,
   type AnsweredQuestion,
   type EvaluationResponse,
   type InterviewResponse,
@@ -33,6 +37,8 @@ const fieldClass =
 
 export default function InterviewPage() {
   const router = useRouter();
+  const apiKey = useApiKey();
+  const openApiKeyDialog = useApiKeyDialog();
   const [stage, setStage] = useState<Stage>("setup");
   const [jobDescription, setJobDescription] = useState("");
   const [totalQuestions, setTotalQuestions] = useState(DEFAULT_QUESTIONS);
@@ -74,16 +80,23 @@ export default function InterviewPage() {
   }
 
   async function callInterview(nextHistory: QA[]) {
+    const key = getApiKey();
+    if (!key) {
+      setError("請先設定你的 OpenAI API Key");
+      openApiKeyDialog();
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/interview", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [OPENAI_KEY_HEADER]: key },
         body: JSON.stringify({ jobDescription, totalQuestions, history: nextHistory }),
       });
       if (res.status === 401) return redirectToLogin();
       const data = await res.json();
+      if (data.code === API_KEY_ERROR_CODE) openApiKeyDialog();
       if (!res.ok) throw new Error(data.error ?? "發生錯誤，請稍後再試");
 
       const result = data as InterviewResponse;
@@ -202,7 +215,28 @@ export default function InterviewPage() {
                 className={`${fieldClass} w-32`}
               />
             </div>
-            <button type="submit" disabled={loading || !jobDescription.trim()} className={`${primaryButton} w-full`}>
+            <div className="flex items-center justify-between gap-3 rounded-sm border border-line bg-cream px-4 py-3 text-sm">
+              <span className="text-muted">
+                OpenAI API Key：
+                {apiKey ? (
+                  <span className="font-mono text-ink">{maskApiKey(apiKey)}</span>
+                ) : apiKey === "" ? (
+                  <span className="text-red-700">尚未設定</span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                onClick={openApiKeyDialog}
+                className="shrink-0 font-medium text-navy underline-offset-4 hover:underline"
+              >
+                {apiKey ? "變更" : "設定 →"}
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !jobDescription.trim() || !apiKey}
+              className={`${primaryButton} w-full`}
+            >
               {loading ? "準備面試中…" : "開始面試 →"}
             </button>
           </form>

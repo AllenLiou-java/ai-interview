@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## OpenAI API Key（BYOK）
+
+本專案採用 BYOK（Bring Your Own Key）模式：伺服器不再讀取 `OPENAI_API_KEY` 環境變數。
+使用者登入後，從頁首的「API Key」或面試設定頁輸入自己的 OpenAI API Key，Key 只存在瀏覽器的 localStorage，
+呼叫 `/api/interview` 時透過 `x-openai-api-key` header 轉送給 OpenAI，伺服器不會保存。
+
+伺服器仍需要的環境變數：`MONGODB_URI`、`SESSION_SECRET`，以及選用的 `OPENAI_MODEL`。
+
 ## Getting Started
 
 First, run the development server:

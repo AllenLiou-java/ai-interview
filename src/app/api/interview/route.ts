@@ -1,6 +1,8 @@
 import {
+  API_KEY_ERROR_CODE,
   MAX_QUESTIONS,
   MIN_QUESTIONS,
+  OPENAI_KEY_HEADER,
   type Evaluation,
   type InterviewRequest,
   type InterviewResponse,
@@ -78,6 +80,8 @@ function evaluationSchema(total: number) {
   };
 }
 
+class ApiKeyError extends Error {}
+
 function formatHistory(history: QA[]) {
   return history
     .map((qa, i) => `第 ${i + 1} 題：${qa.question}\n應徵者回答：${qa.answer}`)
@@ -85,14 +89,12 @@ function formatHistory(history: QA[]) {
 }
 
 async function callOpenAI<T>(
+  apiKey: string,
   system: string,
   user: string,
   schemaName: string,
   schema: object,
 ): Promise<T> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("伺服器未設定 OPENAI_API_KEY");
-
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -112,6 +114,7 @@ async function callOpenAI<T>(
     }),
   });
 
+  if (res.status === 401) throw new ApiKeyError("OpenAI API Key 無效或已失效，請重新設定");
   if (!res.ok) {
     const detail = await res.text();
     console.error("OpenAI API error", res.status, detail);
@@ -164,6 +167,15 @@ function parseBody(body: unknown): InterviewRequest | string {
 export async function POST(request: Request) {
   if (!(await getSession())) return unauthorized();
 
+  // BYOK：Key 由使用者在瀏覽器設定，僅用於轉送給 OpenAI，不記錄也不保存
+  const apiKey = request.headers.get(OPENAI_KEY_HEADER)?.trim();
+  if (!apiKey) {
+    return Response.json(
+      { error: "請先設定你的 OpenAI API Key", code: API_KEY_ERROR_CODE },
+      { status: 400 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -187,6 +199,7 @@ export async function POST(request: Request) {
       const index = history.length + 1;
       const isFirst = history.length === 0;
       const generated = await callOpenAI<{ question: string; suggestion?: Suggestion }>(
+        apiKey,
         `你是一位專業、友善的面試官，正在針對以下職缺進行模擬面試，共 ${totalQuestions} 題。
 ${isFirst ? "" : "首先，針對應徵者最後一題的回答給出改進建議（suggestion）。接著，"}請出下一題（question）。
 題目使用繁體中文，一次只出一題，需緊扣職缺要求，並視應徵者先前的回答適度追問或換方向，避免重複。
@@ -199,6 +212,7 @@ ${INJECTION_GUARD}`,
       result = { type: "question", index, ...generated };
     } else {
       const evaluation = await callOpenAI<Evaluation & { suggestion: Suggestion }>(
+        apiKey,
         `你是一位資深面試官，模擬面試（共 ${totalQuestions} 題）已結束，使用繁體中文回覆。
 - suggestion：針對最後一題回答的改進建議
 - overallScore：0-100 的綜合分數
@@ -217,6 +231,10 @@ ${INJECTION_GUARD}`,
 
     return Response.json(result);
   } catch (err) {
+    // 不用 401，避免前端誤判為登入過期
+    if (err instanceof ApiKeyError) {
+      return Response.json({ error: err.message, code: API_KEY_ERROR_CODE }, { status: 400 });
+    }
     const message = err instanceof Error ? err.message : "未知錯誤";
     return Response.json({ error: message }, { status: 502 });
   }
